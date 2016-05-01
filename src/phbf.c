@@ -54,6 +54,7 @@
 #include <stdarg.h>
 #include <winbase.h>
 #endif
+#include "omp.h"
 #include "dir.h"
 #include "fat_dir.h"
 #include "list.h"
@@ -130,6 +131,13 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
   pstatus_t ind_stop=PSTATUS_OK;
   int pass2=params->pass;
   int phase;
+  int file_check_list_len;
+  int ipos = 0;
+  const struct td_list_head *pos;
+  const struct td_list_head** file_check_array;
+  td_list_len(pos, &file_check_list.list, file_check_list_len);
+  file_check_array=(struct td_list_head**)MALLOC(file_check_list_len*sizeof(struct td_list_head*));
+  td_list_to_array(pos, ipos, &file_check_list.list, file_check_array);
   buffer_size=blocksize+READ_SIZE;
   buffer_start=(unsigned char *)MALLOC(buffer_size);
   for(phase=0; phase<2; phase++)
@@ -145,6 +153,7 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
       uint64_t offset;
       int need_to_check_file;
       int go_backward=1;
+      int thread_id, nloops;
       file_recovery_t file_recovery;
 //      memset(&file_recovery, 0, sizeof(file_recovery_t));
       reset_file_recovery(&file_recovery);
@@ -166,28 +175,32 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
 	need_to_check_file=0;
 	if(offset==current_search_space->start)
 	{
-	  const struct td_list_head *tmpl;
 	  file_recovery_t file_recovery_new;
 //	  memset(&file_recovery_new, 0, sizeof(file_recovery_t));
 	  file_recovery_new.blocksize=blocksize;
 	  file_recovery_new.file_stat=NULL;
-	  td_list_for_each(tmpl, &file_check_list.list)
-	  {
-	    const struct td_list_head *tmp;
-	    const file_check_list_t *pos=td_list_entry_const(tmpl, const file_check_list_t, list);
-	    td_list_for_each(tmp, &pos->file_checks[buffer[pos->offset]].list)
-	    {
-	      const file_check_t *file_check=td_list_entry_const(tmp, const file_check_t, list);
-	      if((file_check->length==0 || memcmp(buffer + file_check->offset, file_check->value, file_check->length)==0) &&
-		  file_check->header_check(buffer, read_size, 0, &file_recovery, &file_recovery_new)!=0)
-	      {
-		file_recovery_new.file_stat=file_check->file_stat;
-		break;
-	      }
-	    }
-	    if(file_recovery_new.file_stat!=NULL)
-	      break;
-	  }
+          #pragma omp parallel private(thread_id, nloops)
+          {
+            #pragma omp for
+            for(ipos = 0; ipos < file_check_list_len; ++ipos)
+            {
+	      const struct td_list_head *tmp;
+	      const file_check_list_t *pos;
+              if(file_recovery_new.file_stat != NULL) continue;
+              pos = td_list_entry_const(file_check_array[ipos], const file_check_list_t, list);
+              td_list_for_each(tmp, &pos->file_checks[buffer[pos->offset]].list)
+              {
+                const file_check_t *file_check=td_list_entry_const(tmp, const file_check_t, list);
+                if((file_check->length==0 || memcmp(buffer + file_check->offset, file_check->value, file_check->length)==0) &&
+                  file_check->header_check(buffer, read_size, 0, &file_recovery, &file_recovery_new)!=0)
+                {
+                  #pragma omp atomic
+                  file_recovery_new.file_stat=file_check->file_stat;
+	          break;
+                }
+              }
+            }
+          }
 	  if(file_recovery_new.file_stat!=NULL)
 	  {
 	    file_recovery_new.location.start=offset;
@@ -310,6 +323,7 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
     log_info("phase=%d +%u\n", phase, params->file_nbr - file_nbr_phase_old);
   }
   free(buffer_start);
+  free(file_check_array);
 #ifdef HAVE_NCURSES
   photorec_info(stdscr, params->file_stats);
 #endif

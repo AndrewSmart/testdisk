@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.59])
+AC_PREREQ([2.62])
 AC_INIT([testdisk],[7.1-WIP],[grenier@cgsecurity.org])
 AC_LANG(C)
 sinclude(acx_pthread.m4)
@@ -982,6 +982,9 @@ photorecf_LDADD=$photorec_LDADD
 CFLAGS="$CFLAGS $coverage_flags"
 CXXFLAGS="$CXXFLAGS $coverage_flags"
 CPPFLAGS="$CPPFLAGS $coverage_flags"
+
+AC_OPENMP
+AC_SUBST(AM_CFLAGS,"$OPENMP_CFLAGS")
 
 AC_SUBST(CFLAGS)
 AC_SUBST(CXXFLAGS)

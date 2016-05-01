@@ -234,6 +234,13 @@ static inline void td_list_splice_init(struct td_list_head *list,
 #define td_list_entry_const(ptr, type, member) \
 	((type *)((const char *)(ptr)-(unsigned long long)(&((type *)0)->member)))
 
+#define td_list_len(pos, head, len) \
+	len = 0; \
+	for (pos = (head)->next; pos != (head); pos = pos->next, ++len);
+
+#define td_list_to_array(pos, ipos, head, to_array) \
+	for (pos = (head)->next; pos != (head); pos = pos->next, ++ipos) to_array[ipos] = pos
+
 /**
  * __td_list_for_each	-	iterate over a list
  * @pos:	the &struct td_list_head to use as a loop counter.
