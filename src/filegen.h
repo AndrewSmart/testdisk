@@ -64,6 +64,7 @@ struct file_stat_struct
 
 struct file_recovery_struct
 {
+  struct td_list_head list;
   char filename[2048];
   alloc_list_t location;
   file_stat_t *file_stat;
@@ -76,6 +77,7 @@ struct file_recovery_struct
   uint64_t offset_error;
   uint64_t extra;	/* extra bytes between offset_ok and offset_error */
   uint64_t calculated_file_size;
+  data_check_t (*resume_check)(const unsigned char*buffer, const unsigned int buffer_size, file_recovery_t *file_recovery);	/* Attempts to resume written over file by searching in buffer for known pattern.*/
   data_check_t (*data_check)(const unsigned char*buffer, const unsigned int buffer_size, file_recovery_t *file_recovery);
   /* data_check modifies file_recovery->calculated_file_size but not must alter file_recovery->file_size */
   void (*file_check)(file_recovery_t *file_recovery);
@@ -84,6 +86,7 @@ struct file_recovery_struct
   int checkpoint_status;	/* 0=suspend at offset_checkpoint if offset_checkpoint>0, 1=resume at offset_checkpoint */
   unsigned int blocksize;
   unsigned int flags;
+  uint32_t last_flvpacket_unixtimestamp;
 };
 
 struct file_hint_struct

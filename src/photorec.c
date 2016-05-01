@@ -701,9 +701,9 @@ void info_list_search_space(const alloc_data_t *list_search_space, const alloc_d
            "(null)"));
     }
   }
-  log_info("%llu sectors contain unknown data, %lu invalid files found %s.\n",
+  /*log_info("%llu sectors contain unknown data, %lu invalid files found %s.\n",
       (long long unsigned)sectors_with_unknown_data, (long unsigned)nbr_headers,
-      (keep_corrupted_file>0?"but saved":"and rejected"));
+      (keep_corrupted_file>0?"but saved":"and rejected"));*/
 }
 
 void free_search_space(alloc_data_t *list_search_space)

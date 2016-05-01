@@ -45,6 +45,11 @@ file_check_list_t file_check_list={
     .list = TD_LIST_HEAD_INIT(file_check_list.list)
 };
 
+/* Contains list of files to resume recovery after the obstructing file is handled. Only possible for resumable file formats (e.g. streams with headers).*/
+file_recovery_t file_recovery_resume_list={
+    .list = TD_LIST_HEAD_INIT(file_recovery_resume_list.list)
+};
+
 static unsigned int index_header_check(void);
 
 static int file_check_cmp(const struct td_list_head *a, const struct td_list_head *b)

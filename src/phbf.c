@@ -75,6 +75,7 @@
 //#define DEBUG_BF2
 #define READ_SIZE 1024*512
 extern file_check_list_t file_check_list;
+extern file_recovery_t file_recovery_resume_list;
 extern uint64_t free_list_allocation_end;
 
 typedef enum { BF_OK=0, BF_STOP=1, BF_EACCES=2, BF_ENOSPC=3, BF_FRAG_FOUND=4, BF_EOF=5, BF_ENOENT=6, BF_ERANGE=7} bf_status_t;
@@ -182,6 +183,10 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
 		  file_check->header_check(buffer, read_size, 0, &file_recovery, &file_recovery_new)!=0)
 	      {
 		file_recovery_new.file_stat=file_check->file_stat;
+#ifdef DEBUG_BF
+  log_info("photorec_bf file_check->header_check true\n");
+#endif
+
 		break;
 	      }
 	    }
@@ -238,10 +243,23 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
 	    if(file_recovery.data_check!=NULL)
 	      res=file_recovery.data_check(buffer_olddata, 2*blocksize, &file_recovery);
 	    file_recovery.file_size+=blocksize;
-	    if(res==DC_STOP || res==DC_ERROR)
+	    if(res==DC_STOP)
 	    { /* EOF found */
 	      need_to_check_file=1;
 	    }
+            else if(res == DC_ERROR)
+            {
+              if(file_recovery.resume_check != NULL)
+              {
+                log_info("Found a resumable file with extension %s\n", file_recovery.extension);
+                //Add file to cache of files to attempt finishing after file starting in this sector is read to EOF.
+                //TODO:Need to attempt resuming this file at EOF of file found in need_to_check_file=1 clause or next sector if no file found.
+                file_recovery_t *file_recovery_copy=(file_recovery_t*)MALLOC(sizeof(file_recovery_t));
+                file_recovery_cpy(file_recovery_copy, &file_recovery);
+                td_list_add_tail(&file_recovery_copy->list, &file_recovery_resume_list.list);
+              }
+              need_to_check_file=1; //Need to handle the file which overwrote this one starting this sector.
+            }
 	  }
 	  if(file_recovery.file_stat->file_hint->max_filesize>0 && file_recovery.file_size>=file_recovery.file_stat->file_hint->max_filesize)
 	  {
@@ -318,6 +336,11 @@ pstatus_t photorec_bf(struct ph_param *params, const struct ph_options *options,
 
 static bf_status_t photorec_bf_pad(struct ph_param *params, file_recovery_t *file_recovery, alloc_data_t *list_search_space, const int phase, const uint64_t file_offset, alloc_data_t **current_search_space, uint64_t *offset, unsigned char *buffer, unsigned char *block_buffer)
 {
+#ifdef DEBUG_BF
+  log_info("photorec_bf_pad file:%c%07u", ((params->status==STATUS_EXT2_ON_SAVE_EVERYTHING ||
+      params->status==STATUS_EXT2_OFF_SAVE_EVERYTHING)?'b':'f'),
+    (unsigned int)((file_recovery->location.start - params->partition->part_offset)/ params->disk->sector_size));
+#endif
   const unsigned int blocksize=params->blocksize;
   { /* Add remaining data blocs */
     unsigned int nbr;
@@ -444,6 +467,12 @@ static bf_status_t photorec_bf_pad(struct ph_param *params, file_recovery_t *fil
 
 static bf_status_t photorec_bf_frag_fast(struct ph_param *params, file_recovery_t *file_recovery, alloc_data_t *list_search_space, alloc_data_t *start_search_space, const int phase, alloc_data_t **current_search_space, uint64_t *offset, unsigned char *buffer, unsigned char *block_buffer, const unsigned int frag)
 {
+#ifdef DEBUG_BF
+  log_info("photorec_bf_frag_fast file:%c%07u", ((params->status==STATUS_EXT2_ON_SAVE_EVERYTHING ||
+      params->status==STATUS_EXT2_OFF_SAVE_EVERYTHING)?'b':'f'),
+    (unsigned int)((file_recovery->location.start - params->partition->part_offset)/ params->disk->sector_size));
+#endif
+
   const unsigned int blocksize=params->blocksize;
   const uint64_t original_offset_error=file_recovery->offset_error;
   const uint64_t original_offset_ok=file_recovery->offset_ok;
@@ -536,6 +565,11 @@ static bf_status_t photorec_bf_frag_fast(struct ph_param *params, file_recovery_
 
 static bf_status_t photorec_bf_frag(struct ph_param *params, file_recovery_t *file_recovery, alloc_data_t *list_search_space, alloc_data_t *start_search_space, const int phase, alloc_data_t **current_search_space, uint64_t *offset, unsigned char *buffer, unsigned char *block_buffer, const unsigned int frag)
 {
+#ifdef DEBUG_BF
+  log_info("photorec_bf_frag file:%c%07u", ((params->status==STATUS_EXT2_ON_SAVE_EVERYTHING ||
+      params->status==STATUS_EXT2_OFF_SAVE_EVERYTHING)?'b':'f'),
+    (unsigned int)((file_recovery->location.start - params->partition->part_offset)/ params->disk->sector_size));
+#endif
   uint64_t file_offset;
   const uint64_t original_offset_error=file_recovery->offset_error;
   const unsigned int blocksize=params->blocksize;
@@ -719,6 +753,12 @@ static bf_status_t photorec_bf_frag(struct ph_param *params, file_recovery_t *fi
 
 static pstatus_t photorec_bf_aux(struct ph_param *params, file_recovery_t *file_recovery, alloc_data_t *list_search_space, const int phase)
 {
+#ifdef DEBUG_BF
+  log_info("photorec_bf_aux file:%c%07u", ((params->status==STATUS_EXT2_ON_SAVE_EVERYTHING ||
+      params->status==STATUS_EXT2_OFF_SAVE_EVERYTHING)?'b':'f'),
+    (unsigned int)((file_recovery->location.start - params->partition->part_offset)/ params->disk->sector_size));
+#endif
+
   bf_status_t ind_stop;
   alloc_data_t *current_search_space=NULL;
   uint64_t offset=0;
